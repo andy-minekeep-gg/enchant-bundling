@@ -15,7 +15,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.InventoryHolder;
@@ -80,14 +79,10 @@ public final class EnchantBundlingMain extends JavaPlugin implements Listener {
             if (isBundle(event.getCurrentItem())) {
                 bundleItem = event.getCurrentItem();
                 picking = event.getCursor();
-            } else {
-                bundleItem = null;
-                picking = null;
-            }
+            } else return;
         }
         if (picking == null || picking.isEmpty()) {
             if (bundleItem == null) return;
-            System.out.println("update item info");
             BundleMeta bundleMeta = (BundleMeta) bundleItem.getItemMeta();
             bundleItem.setItemMeta(showHighestLevel(
                             bundleMeta,
@@ -105,7 +100,6 @@ public final class EnchantBundlingMain extends JavaPlugin implements Listener {
                 return;
             }
             Enchantment toMatch = findCurrentBundleEnchant(bundleMeta);
-            System.out.println("matching " + toMatch);
             if (toMatch == null) {
                 event.setCancelled(true);
                 bundleMeta.setItems(
@@ -134,8 +128,7 @@ public final class EnchantBundlingMain extends JavaPlugin implements Listener {
                     });
                     bundleMeta.setItems(books);
                     bundleItem.setItemMeta(showHighestLevel(bundleMeta, books, toMatch));
-                    if (event.getAction() == InventoryAction.SWAP_WITH_CURSOR)
-                        event.setCancelled(true);
+                    event.setCancelled(true);
                     picking.setAmount(0);
                     return;
                 }
@@ -143,8 +136,7 @@ public final class EnchantBundlingMain extends JavaPlugin implements Listener {
             books.add(picking.clone());
             bundleMeta.setItems(books);
             bundleItem.setItemMeta(showHighestLevel(bundleMeta, books, toMatch));
-            if (event.getAction() == InventoryAction.SWAP_WITH_CURSOR)
-                event.setCancelled(true);
+            event.setCancelled(true);
             picking.setAmount(0);
         }
     }
@@ -195,11 +187,11 @@ public final class EnchantBundlingMain extends JavaPlugin implements Listener {
                         a -> getStoredLevel(a, target))
                 )
                 .orElse(null);
-        if (item == null) return meta;
-        String content = "Highest: " + getStoredLevel(
+        int level = item == null ? 0 : getStoredLevel(
                 item,
                 target
         );
+        String content = "Highest: " + level;
         meta.lore(Collections.singletonList(
                         Component
                                 .text(content, NamedTextColor.WHITE)
