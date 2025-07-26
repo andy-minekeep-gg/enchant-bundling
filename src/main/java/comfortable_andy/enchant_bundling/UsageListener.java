@@ -53,8 +53,8 @@ public class UsageListener implements Listener {
         }
         if (picking.getType() == Material.ENCHANTED_BOOK) {
             insertBook(bundleItem, picking);
-            event.setCancelled(true);
         }
+        event.setCancelled(true);
     }
 
     public static boolean insertBook(ItemStack bundleItem, ItemStack inserting) {
