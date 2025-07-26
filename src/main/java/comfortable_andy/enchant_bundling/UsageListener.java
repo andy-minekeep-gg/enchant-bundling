@@ -12,10 +12,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BundleMeta;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 public class UsageListener implements Listener {
 
@@ -85,24 +82,33 @@ public class UsageListener implements Listener {
                         .comparingInt(a -> EnchantBundlingMain.getStoredLevel(a, toMatch))
                 )
                 .toList());
-        int addingLevel = EnchantBundlingMain.getStoredLevel(inserting, toMatch);
-        for (ItemStack book : books) {
-            int level = EnchantBundlingMain.getStoredLevel(book, toMatch);
-            if (level == addingLevel) {
-                book.editMeta(EnchantmentStorageMeta.class, m -> {
-                    m.removeStoredEnchant(toMatch);
-                    m.addStoredEnchant(toMatch, level + 1, true);
-                });
-                bundleMeta.setItems(books);
-                bundleItem.setItemMeta(EnchantBundlingMain.showHighestLevel(bundleMeta, books, toMatch));
-                inserting.setAmount(0);
-                return true;
+
+        books.add(inserting.clone());
+        inserting.setAmount(0);
+        int size = books.size();
+        for (int i = 0; i < size; i++) {
+            ItemStack outer = books.get(i);
+            int outerLevel = EnchantBundlingMain.getStoredLevel(outer, toMatch);
+            for (int j = 0; j < size; j++) {
+                if (i == j) continue;
+                ItemStack book = books.get(j);
+                if (book == null) continue;
+                int level = EnchantBundlingMain
+                        .getStoredLevel(book, toMatch);
+                if (level == outerLevel) {
+                    book.editMeta(EnchantmentStorageMeta.class, m -> {
+                        m.removeStoredEnchant(toMatch);
+                        m.addStoredEnchant(toMatch, level + 1, true);
+                    });
+                    books.set(i, null);
+                    break;
+                }
             }
         }
-        books.add(inserting.clone());
+        books.removeIf(Objects::isNull);
         bundleMeta.setItems(books);
         bundleItem.setItemMeta(EnchantBundlingMain.showHighestLevel(bundleMeta, books, toMatch));
-        inserting.setAmount(0);
         return true;
     }
+
 }
