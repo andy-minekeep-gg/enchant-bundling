@@ -12,11 +12,6 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.command.CommandSender;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemRarity;
 import org.bukkit.inventory.ItemStack;
@@ -26,19 +21,24 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 @SuppressWarnings("UnstableApiUsage")
-public final class EnchantBundlingMain extends JavaPlugin implements Listener {
+public final class EnchantBundlingMain extends JavaPlugin {
+
+    private static EnchantBundlingMain INST;
 
     public static final NamespacedKey ITEM_KEY = new NamespacedKey("enchant_bundling", "bundle");
 
+    public static Enchantment getFirstInSet(Set<Enchantment> set) {
+        return new ArrayList<>(set).getFirst();
+    }
+
     @Override
     public void onEnable() {
-        getServer().getPluginManager().registerEvents(this, this);
+        INST = this;
+        getServer().getPluginManager().registerEvents(new UsageListener(), this);
+        getServer().getPluginManager().registerEvents(new PickupListener(), this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, e -> {
             Commands commands = e.registrar();
             commands.register(
@@ -66,82 +66,7 @@ public final class EnchantBundlingMain extends JavaPlugin implements Listener {
         });
     }
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onBundleClick(InventoryClickEvent event) {
-        if (event.getClickedInventory() == null) return;
-        if (!event.getClick().isLeftClick() || event.getClick().isShiftClick()) return;
-        ItemStack bundleItem;
-        ItemStack picking;
-        if (isBundle(event.getCursor())) {
-            bundleItem = event.getCursor();
-            picking = event.getCurrentItem();
-        } else {
-            if (isBundle(event.getCurrentItem())) {
-                bundleItem = event.getCurrentItem();
-                picking = event.getCursor();
-            } else return;
-        }
-        if (picking == null || picking.isEmpty()) {
-            if (bundleItem == null) return;
-            BundleMeta bundleMeta = (BundleMeta) bundleItem.getItemMeta();
-            bundleItem.setItemMeta(showHighestLevel(
-                            bundleMeta,
-                            bundleMeta.getItems(),
-                            findCurrentBundleEnchant(bundleMeta)
-                    )
-            );
-            return;
-        }
-        BundleMeta bundleMeta = (BundleMeta) bundleItem.getItemMeta();
-        if (picking.getType() == Material.ENCHANTED_BOOK) {
-            EnchantmentStorageMeta enchantMeta = (EnchantmentStorageMeta) picking.getItemMeta();
-            if (enchantMeta.getStoredEnchants().size() > 1) {
-                event.setCancelled(true);
-                return;
-            }
-            Enchantment toMatch = findCurrentBundleEnchant(bundleMeta);
-            if (toMatch == null) {
-                event.setCancelled(true);
-                bundleMeta.setItems(
-                        Collections.singletonList(picking.clone())
-                );
-                bundleItem.setItemMeta(showHighestLevel(bundleMeta, bundleMeta.getItems(), toMatch));
-                picking.setAmount(0);
-                return;
-            }
-            if (!enchantMeta.hasStoredEnchant(toMatch)) {
-                event.setCancelled(true);
-                return;
-            }
-            List<ItemStack> books = new ArrayList<>(bundleMeta.getItems().stream()
-                    .filter(i -> i.getItemMeta() instanceof EnchantmentStorageMeta meta
-                            && meta.hasStoredEnchant(toMatch))
-                    .sorted(Comparator.comparingInt(a -> getStoredLevel(a, toMatch)))
-                    .toList());
-            int addingLevel = getStoredLevel(picking, toMatch);
-            for (ItemStack book : books) {
-                int level = getStoredLevel(book, toMatch);
-                if (level == addingLevel) {
-                    book.editMeta(EnchantmentStorageMeta.class, m -> {
-                        m.removeStoredEnchant(toMatch);
-                        m.addStoredEnchant(toMatch, level + 1, true);
-                    });
-                    bundleMeta.setItems(books);
-                    bundleItem.setItemMeta(showHighestLevel(bundleMeta, books, toMatch));
-                    event.setCancelled(true);
-                    picking.setAmount(0);
-                    return;
-                }
-            }
-            books.add(picking.clone());
-            bundleMeta.setItems(books);
-            bundleItem.setItemMeta(showHighestLevel(bundleMeta, books, toMatch));
-            event.setCancelled(true);
-            picking.setAmount(0);
-        }
-    }
-
-    private static @Nullable Enchantment findCurrentBundleEnchant(BundleMeta meta) {
+    public static @Nullable Enchantment findCurrentBundleEnchant(BundleMeta meta) {
         return meta.getItems().stream()
                 .filter(i -> i.getItemMeta() instanceof EnchantmentStorageMeta m
                         && m.getStoredEnchants().size() == 1)
@@ -153,12 +78,6 @@ public final class EnchantBundlingMain extends JavaPlugin implements Listener {
                 )
                 .findFirst().orElse(null);
     }
-
-    @EventHandler
-    public void onInteract(PlayerInteractEvent event) {
-        if (isBundle(event.getItem())) event.setCancelled(true);
-    }
-
 
     private static CommandSender sender(CommandSourceStack stack) {
         return stack.getExecutor() != null ? stack.getExecutor() : stack.getSender();
@@ -174,7 +93,7 @@ public final class EnchantBundlingMain extends JavaPlugin implements Listener {
         return stack;
     }
 
-    public static boolean isBundle(ItemStack item) {
+    public static boolean isBundle(@Nullable ItemStack item) {
         return item != null
                 && !item.isEmpty()
                 && item.hasItemMeta()
@@ -182,7 +101,7 @@ public final class EnchantBundlingMain extends JavaPlugin implements Listener {
     }
 
     public static BundleMeta showHighestLevel(BundleMeta meta, List<ItemStack> books, Enchantment target) {
-        ItemStack item = books.stream()
+        ItemStack item = target == null ? null : books.stream()
                 .max(Comparator.comparingInt(
                         a -> getStoredLevel(a, target))
                 )
@@ -204,8 +123,12 @@ public final class EnchantBundlingMain extends JavaPlugin implements Listener {
         return meta;
     }
 
-    private static int getStoredLevel(ItemStack i, Enchantment enchantment) {
+    public static int getStoredLevel(ItemStack i, Enchantment enchantment) {
         return enchantment == null ? 0 : ((EnchantmentStorageMeta) i.getItemMeta()).getStoredEnchantLevel(enchantment);
+    }
+
+    public static EnchantBundlingMain getInstance() {
+        return INST;
     }
 
 }
