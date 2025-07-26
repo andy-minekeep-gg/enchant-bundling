@@ -1,0 +1,11 @@
+name: enchant_bundling
+version: '0.0.1-alpha'
+main: comfortable_andy.enchant_bundling.EnchantBundlingMain
+api-version: '1.21'
+authors: [ Comfortable_Andy ]
+softdepend:
+  - multiple-item-crafting
+permissions:
+  enchant_bundling.command:
+    default: op
+    description: Use the command idk what else it would be.
